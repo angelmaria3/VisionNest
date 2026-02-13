@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabase";
 import logo from "../assets/VisionNest.png";
 
 const QUOTES = [
@@ -12,11 +13,43 @@ const QUOTES = [
 export default function Dashboard() {
   const username = localStorage.getItem("username") || "Creator";
   const navigate = useNavigate();
+  const [visions, setVisions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [visions] = useState([
-    { id: 1, title: "Get Fit" },
-    { id: 2, title: "Learn Coding" },
-  ]);
+  useEffect(() => {
+    fetchVisions();
+  }, []);
+
+  const fetchVisions = async () => {
+    try {
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
+
+      if (userError || !userData?.user) {
+        console.log("User not found");
+        setLoading(false);
+        return;
+      }
+
+      const user = userData.user;
+
+      const { data, error } = await supabase
+        .from("visions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(error.message);
+      } else {
+        setVisions(data || []);
+      }
+    } catch (err) {
+      console.log("Unexpected error:", err);
+    }
+
+    setLoading(false);
+  };
 
   const quote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
 
@@ -31,35 +64,51 @@ export default function Dashboard() {
         <div style={styles.user}>Hey {username} 👋</div>
       </header>
 
-      {/* Quote Banner */}
+      {/* Quote */}
       <section style={styles.quoteBox}>
         <p style={styles.quoteText}>{quote}</p>
       </section>
 
       {/* Visions */}
       <main style={styles.main}>
-        <div style={styles.grid}>
-          {visions.map((v) => (
-            <div
-              key={v.id}
-              style={styles.visionCard}
-              onClick={() => navigate(`/vision/${v.id}`)}
-            >
-              <h3 style={styles.visionTitle}>{v.title}</h3>
-              <p style={styles.openHint}>Tap to open →</p>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <p>Loading visions...</p>
+        ) : visions.length === 0 ? (
+          <p>No visions yet. Add your first vision 🚀</p>
+        ) : (
+          <div style={styles.grid}>
+            {visions.map((v) => (
+              <div
+                key={v.id}
+                style={styles.visionCard}
+                onClick={() => navigate(`/vision/${v.id}`)}
+              >
+                <h3 style={styles.visionTitle}>{v.title}</h3>
+                <p style={styles.openHint}>Tap to open →</p>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
 
-      {/* Bottom Actions */}
+      {/* Footer */}
       <footer style={styles.footer}>
-        <button style={styles.primaryBtn}>+ Add Vision</button>
-        <button style={styles.secondaryBtn}>View Vision Board</button>
+        <button
+          style={styles.primaryBtn}
+          onClick={() => navigate("/add-vision")}
+        >
+          + Add Vision
+        </button>
+
+        <button style={styles.secondaryBtn}>
+          View Vision Board
+        </button>
       </footer>
     </div>
   );
 }
+
+/* ================= STYLES ================= */
 
 const styles = {
   container: {
@@ -110,7 +159,6 @@ const styles = {
     padding: "22px",
     cursor: "pointer",
     boxShadow: "0 12px 30px rgba(0,0,0,0.15)",
-    transition: "transform .2s ease, box-shadow .2s ease",
   },
   visionTitle: { color: "#2B1A4A", fontSize: "1.2rem" },
   openHint: { marginTop: 8, color: "#5B3B8C", fontSize: "0.85rem" },
